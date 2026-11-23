@@ -1,7 +1,35 @@
 import pygame
 import sys
+import json
+from pathlib import Path
 from lote import Lote
 from config import LOTES_CONFIG
+
+ARQUIVO_ESTADO = Path(__file__).resolve().parent / "savegame.json"
+
+def carregar_estado():
+    if not ARQUIVO_ESTADO.exists():
+        return None
+
+    try:
+        with open(ARQUIVO_ESTADO, "r", encoding="utf-8") as _arquivo:
+            return json.load(_arquivo)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+def salvar_estado(dinheiro, lotes, tempo_jogo, ganhou):
+    estado = {
+        "dinheiro": dinheiro,
+        "niveis": [lote.nivel for lote in lotes],
+        "tempo_jogo": tempo_jogo,
+        "ganhou": ganhou,
+    }
+
+    try:
+        with open(ARQUIVO_ESTADO, "w", encoding="utf-8") as arquivo:
+            json.dump(estado, arquivo, indent=4, ensure_ascii=False)
+    except OSError:
+        pass
 
 def verifica_fim(lotes):
     for lote in lotes:
@@ -54,17 +82,76 @@ for i in range(4):
     lote.nivel = 0
     lotes.append(lote)
 
-dinheiro = 5 
-contador_frames = 0
+estado = carregar_estado()
 
+pode_continuar = False
+if isinstance(estado, dict):
+    niveis_salvos = estado.get("niveis", [])
+    if len(niveis_salvos) == len(lotes) and not estado.get("ganhou", False):
+        pode_continuar = all(
+            isinstance(nivel, int) and nivel < lotes[i].nivel_maximo
+            for i, nivel in enumerate(niveis_salvos)
+        )
+
+fonte_menu_titulo = pygame.font.Font(None, 72)
+fonte_menu = pygame.font.Font(None, 50)
+
+botao_continuar = pygame.Rect(420, 350, 360, 70)
+botao_novo = pygame.Rect(420, 450, 360, 70)
+
+jogo_iniciado = False
+rodando = True
 clock = pygame.time.Clock()
 
+while rodando and not jogo_iniciado:
+    tela.fill((0, 0, 0))
+
+    titulo = fonte_menu.render("Fazendinha Click Click", True, (255, 255, 255))
+    tela.blit(titulo, titulo.get_rect(center=(600, 220)))
+
+    if pode_continuar:
+        pygame.draw.rect(tela, (0, 100, 200), botao_continuar)
+        texto = fonte_menu.render("Continuar", True, (255, 255, 255))
+        tela.blit(texto, texto.get_rect(center=botao_continuar.center))
+
+    pygame.draw.rect(tela, (0, 150, 0), botao_novo)
+    texto = fonte_menu.render("Novo jogo", True, (255, 255, 255))
+    tela.blit(texto, texto.get_rect(center=botao_novo.center))
+
+    for evento in pygame.event.get():
+        if evento.type == pygame.QUIT:
+            rodando = False
+
+        if evento.type == pygame.MOUSEBUTTONDOWN:
+            if pode_continuar and botao_continuar.collidepoint(evento.pos):
+                dinheiro_salvo = estado["dinheiro"]
+                niveis_salvos = estado["niveis"]
+
+                dinheiro = dinheiro_salvo
+                tempo_jogo = estado["tempo_jogo"]
+
+                for i in range(4):
+                    nivel = niveis_salvos[i]
+                    for x in range(nivel):
+                        lotes[i].evoluir(i + 1)
+
+                ganhou = estado["ganhou"]
+                jogo_iniciado = True
+
+            if botao_novo.collidepoint(evento.pos):
+                if ARQUIVO_ESTADO.exists():
+                    ARQUIVO_ESTADO.unlink()
+
+                dinheiro = 5
+                tempo_jogo = 0
+                ganhou = False
+                jogo_iniciado = True
+
+    pygame.display.flip()
+    clock.tick(60)
+
+contador_frames = 0
 sinais_ganho = []
-
-rodando = True
-ganhou = False
-
-tempo_jogo = 0
 
 while rodando:
     contador_frames += 1
@@ -75,9 +162,11 @@ while rodando:
         contador_frames = 0
         if not ganhou:
             tempo_jogo += 1
+        salvar_estado(dinheiro, lotes, tempo_jogo, ganhou)
 
     for evento in pygame.event.get():
         if evento.type == pygame.QUIT:
+            salvar_estado(dinheiro, lotes, tempo_jogo, ganhou)
             rodando = False
 
         for i, lote in enumerate(lotes):
@@ -93,6 +182,7 @@ while rodando:
                     
                     if verifica_fim(lotes):
                         ganhou = True
+                    salvar_estado(dinheiro, lotes, tempo_jogo, ganhou)
             
             if lote.verifica_clique_lote(evento):
                 if lote.ganho > 0:
@@ -105,6 +195,7 @@ while rodando:
                         'texto': f"+{lote.ganho}",
                         'tempo_vida': 45
                     })
+                    salvar_estado(dinheiro, lotes, tempo_jogo, ganhou)
 
     if not ganhou:
         tela.blit(imagem_fundo, (0, 0))
