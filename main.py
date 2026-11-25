@@ -84,9 +84,13 @@ for i in range(4):
 
 estado = carregar_estado()
 
+# continuar só aparece quando existe um estado de jogo que nao esta na pontuacao maxima
 pode_continuar = False
+
 if isinstance(estado, dict):
     niveis_salvos = estado.get("niveis", [])
+
+    # valida a estrutura
     if len(niveis_salvos) == len(lotes) and not estado.get("ganhou", False):
         pode_continuar = all(
             isinstance(nivel, int) and nivel < lotes[i].nivel_maximo
@@ -124,12 +128,14 @@ while rodando and not jogo_iniciado:
 
         if evento.type == pygame.MOUSEBUTTONDOWN:
             if pode_continuar and botao_continuar.collidepoint(evento.pos):
+                # carrega o estado salvo
                 dinheiro_salvo = estado["dinheiro"]
                 niveis_salvos = estado["niveis"]
 
                 dinheiro = dinheiro_salvo
                 tempo_jogo = estado["tempo_jogo"]
 
+                # atualiza os níveis dos lotes com base nos dados salvos
                 for i in range(4):
                     nivel = niveis_salvos[i]
                     for x in range(nivel):
@@ -138,6 +144,7 @@ while rodando and not jogo_iniciado:
                 ganhou = estado["ganhou"]
                 jogo_iniciado = True
 
+            # novo jogo
             if botao_novo.collidepoint(evento.pos):
                 if ARQUIVO_ESTADO.exists():
                     ARQUIVO_ESTADO.unlink()
